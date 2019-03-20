@@ -20,8 +20,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"reflect"
 	"runtime"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 // TCPDialCheck returns a Check that checks TCP connectivity to the provided
@@ -58,6 +61,26 @@ func HTTPGetCheck(url string, timeout time.Duration) Check {
 		}
 		return nil
 	}
+}
+
+// GRPCGetCheck returns a Check that performs an GRPC GET request against the
+// specified URL. The check fails if the response times out or returns a non-200
+// status code.
+func GRPCGetCheck(GRPCClientFunction func(cc *grpc.ClientConn) (interface, error), GRPCService string, host string, timeout time.Duration) Check {
+	conn, err := grpc.Dial(host, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	client, err := GRPCClientFunction(conn)
+	if err != nil {
+		return err
+	}
+	resp, err := reflect.ValueOf(client).Call(GRPCService).Interface()
+	if err != nil {
+		return fmt.Errorf("returned status %s", resp.StatusCode)
+	}
+	return nil
 }
 
 // DatabasePingCheck returns a Check that validates connectivity to a
